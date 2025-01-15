@@ -1,14 +1,14 @@
 # Copyright (c) 2021-2024, Crate.io Inc.
 # Distributed under the terms of the AGPLv3 license, see LICENSE.
 import logging
-import os
-import sys
 import typing as t
-import urllib.parse
 
 import click
+from click import ClickException
 from click_aliases import ClickAliasedGroup
 
+from cratedb_toolkit.model import DatabaseAddress
+from cratedb_toolkit.options import cratedb_http_option, cratedb_sqlalchemy_option
 from cratedb_toolkit.util import DatabaseAdapter
 from cratedb_toolkit.util.cli import (
     boot_click,
@@ -75,26 +75,25 @@ def help_serve():
     """  # noqa: E501
 
 
-cratedb_sqlalchemy_option = click.option(
-    "--cratedb-sqlalchemy-url", envvar="CRATEDB_SQLALCHEMY_URL", type=str, required=False, help="CrateDB SQLAlchemy URL"
-)
-
-
 @click.group(cls=ClickAliasedGroup)  # type: ignore[arg-type]
 @cratedb_sqlalchemy_option
+@cratedb_http_option
 @click.option("--verbose", is_flag=True, required=False, help="Turn on logging")
 @click.option("--debug", is_flag=True, required=False, help="Turn on logging with debug level")
 @click.option("--scrub", envvar="SCRUB", is_flag=True, required=False, help="Blank out identifiable information")
 @click.version_option()
 @click.pass_context
-def cli(ctx: click.Context, cratedb_sqlalchemy_url: str, verbose: bool, debug: bool, scrub: bool):
+def cli(
+    ctx: click.Context, cratedb_sqlalchemy_url: str, cratedb_http_url: str, verbose: bool, debug: bool, scrub: bool
+):
     """
     Diagnostics and informational utilities.
     """
-    if not cratedb_sqlalchemy_url:
-        logger.error("Unable to operate without database address")
-        sys.exit(1)
-    ctx.meta.update({"cratedb_sqlalchemy_url": cratedb_sqlalchemy_url, "scrub": scrub})
+    if not cratedb_sqlalchemy_url and not cratedb_http_url:
+        raise ClickException("Unable to operate without database address")
+    ctx.meta.update(
+        {"cratedb_http_url": cratedb_http_url, "cratedb_sqlalchemy_url": cratedb_sqlalchemy_url, "scrub": scrub}
+    )
     return boot_click(ctx, verbose, debug)
 
 
@@ -149,12 +148,12 @@ cli.add_command(job_statistics, name="job-statistics", aliases=["jobstats"])
 def job_statistics_collect(ctx: click.Context, once: bool):
     """
     Run jobs_log collector.
-
-    # TODO: Forward `cratedb_sqlalchemy_url` properly.
     """
     import cratedb_toolkit.wtf.query_collector
 
-    cratedb_toolkit.wtf.query_collector.init()
+    address = DatabaseAddress.from_string(ctx.meta["cratedb_http_url"] or ctx.meta["cratedb_sqlalchemy_url"])
+
+    cratedb_toolkit.wtf.query_collector.boot(address=address)
     if once:
         cratedb_toolkit.wtf.query_collector.record_once()
     else:
@@ -166,17 +165,11 @@ def job_statistics_collect(ctx: click.Context, once: bool):
 def job_statistics_view(ctx: click.Context):
     """
     View job statistics about collected queries.
-
-    # TODO: Forward `cratedb_sqlalchemy_url` properly.
     """
-    cratedb_sqlalchemy_url = ctx.meta["cratedb_sqlalchemy_url"]
-    url = urllib.parse.urlparse(cratedb_sqlalchemy_url)
-    hostname = f"{url.hostname}:{url.port or 4200}"
-    os.environ["HOSTNAME"] = hostname
-
     import cratedb_toolkit.wtf.query_collector
 
-    cratedb_toolkit.wtf.query_collector.init()
+    address = DatabaseAddress.from_string(ctx.meta["cratedb_http_url"] or ctx.meta["cratedb_sqlalchemy_url"])
+    cratedb_toolkit.wtf.query_collector.boot(address=address)
 
     response: t.Dict = {"meta": {}, "data": {}}
     response["meta"]["remark"] = "WIP! This is a work in progress. The output format will change."

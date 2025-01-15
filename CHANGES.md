@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Fixed connectivity for `job-statistics collect`
 
 ## 2025/01/13 v0.0.30
 - Dependencies: Minimize dependencies of core installation,

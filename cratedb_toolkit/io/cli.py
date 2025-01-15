@@ -8,6 +8,7 @@ from click_aliases import ClickAliasedGroup
 
 from cratedb_toolkit.api.main import ClusterBase, ManagedCluster, StandaloneCluster
 from cratedb_toolkit.model import DatabaseAddress, InputOutputResource, TableAddress
+from cratedb_toolkit.options import cratedb_cluster_id_option, cratedb_http_option, cratedb_sqlalchemy_option
 from cratedb_toolkit.util.cli import boot_click, make_command
 
 logger = logging.getLogger(__name__)
@@ -27,13 +28,9 @@ def cli(ctx: click.Context, verbose: bool, debug: bool):
 
 @make_command(cli, name="table")
 @click.argument("url")
-@click.option(
-    "--cluster-id", envvar="CRATEDB_CLOUD_CLUSTER_ID", type=str, required=False, help="CrateDB Cloud cluster identifier"
-)
-@click.option(
-    "--cratedb-sqlalchemy-url", envvar="CRATEDB_SQLALCHEMY_URL", type=str, required=False, help="CrateDB SQLAlchemy URL"
-)
-@click.option("--cratedb-http-url", envvar="CRATEDB_HTTP_URL", type=str, required=False, help="CrateDB HTTP URL")
+@cratedb_cluster_id_option
+@cratedb_http_option
+@cratedb_sqlalchemy_option
 @click.option("--schema", envvar="CRATEDB_SCHEMA", type=str, required=False, help="Schema where to import the data")
 @click.option("--table", envvar="CRATEDB_TABLE", type=str, required=False, help="Table where to import the data")
 @click.option("--format", "format_", type=str, required=False, help="File format of the import resource")
