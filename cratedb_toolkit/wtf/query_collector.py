@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2024, Crate.io Inc.
+# Copyright (c) 2021-2025, Crate.io Inc.
 # Distributed under the terms of the AGPLv3 license, see LICENSE.
 
 # ruff: noqa: S608
@@ -15,17 +15,9 @@ from cratedb_toolkit.model import DatabaseAddress
 
 logger = logging.getLogger(__name__)
 
-cratedb_sqlalchemy_url = os.getenv("CRATEDB_SQLALCHEMY_URL", "crate://crate@localhost:4200")
-address = DatabaseAddress.from_string(cratedb_sqlalchemy_url)
-host = f"{address.uri.host}:{address.uri.port}"
-username = address.uri.username
-password = address.uri.password
-_, table_address = address.decode()
-schema = table_address.schema or "stats"
+TRACING = False
 
-interval = float(os.getenv("INTERVAL", 10))
-stmt_log_table = os.getenv("STMT_TABLE", f"{schema}.statement_log")
-last_exec_table = os.getenv("LAST_EXEC_TABLE", f"{schema}.last_execution")
+
 last_execution_ts = 0
 sys_jobs_log = {}
 bucket_list = [10, 50, 100, 500, 1000, 2000, 5000, 10000, 15000, 20000]
@@ -43,16 +35,28 @@ bucket_dict = {
     "INF": 0,
 }
 
-
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-conn = client.connect(host, username=username, password=password)
-cursor = conn.cursor()
-last_scrape = int(time.time() * 1000) - (interval * 60000)
-
-TRACING = False
+stmt_log_table, last_exec_table, cursor, last_scrape = None, None, None, None
 
 
-def init():
+def boot(address: DatabaseAddress):
+    # TODO: Refactor to non-global variables.
+    global stmt_log_table, last_exec_table, cursor, last_scrape, interval
+    schema = address.schema or "stats"
+
+    interval = float(os.getenv("INTERVAL", 10))
+    stmt_log_table = os.getenv("STMT_TABLE", f"{schema}.statement_log")
+    last_exec_table = os.getenv("LAST_EXEC_TABLE", f"{schema}.last_execution")
+
+    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+    logger.info(f"Connecting to {address.dburi}")
+    conn = client.connect(address.dburi, username=address.username, password=address.password, schema=schema)
+    cursor = conn.cursor()
+    last_scrape = int(time.time() * 1000) - (interval * 60000)
+
+    dbinit()
+
+
+def dbinit():
     stmt = (
         f"CREATE TABLE IF NOT EXISTS {stmt_log_table} "
         f"(id TEXT, stmt TEXT, calls INT, bucket OBJECT, last_used TIMESTAMP, "
@@ -249,7 +253,7 @@ def record_forever():
 
 
 def main():
-    init()
+    boot()
     record_forever()
 
 

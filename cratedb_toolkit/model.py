@@ -77,6 +77,27 @@ class DatabaseAddress:
             uri.path = ""
         return uri, TableAddress(database, table)
 
+    @property
+    def username(self) -> t.Union[str, None]:
+        """
+        Return the username of the database URI.
+        """
+        return self.uri.username
+
+    @property
+    def password(self) -> t.Union[str, None]:
+        """
+        Return the password of the database URI.
+        """
+        return self.uri.password
+
+    @property
+    def schema(self) -> t.Union[str, None]:
+        """
+        Return the `?schema=` query parameter of the database URI.
+        """
+        return self.uri.query_params.get("schema")
+
 
 @dataclasses.dataclass
 class TableAddress:
